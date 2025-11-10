@@ -8,8 +8,8 @@ import (
 	"os/signal"
 
 	"github.com/gorilla/websocket"
-	"github.com/nikarpoff/music-repetition-platform/internal/audio"
-	"github.com/nikarpoff/music-repetition-platform/internal/config"
+	"github.com/nikarpoff/audio-streamer/internal/audio"
+	"github.com/nikarpoff/audio-streamer/internal/config"
 )
 
 var (

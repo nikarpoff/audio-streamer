@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/gordonklaus/portaudio"
-	"github.com/nikarpoff/music-repetition-platform/internal/config"
+	"github.com/nikarpoff/audio-streamer/internal/config"
 )
 
 type Capture struct {

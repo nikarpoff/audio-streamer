@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/nikarpoff/music-repetition-platform/internal/audio"
-	"github.com/nikarpoff/music-repetition-platform/internal/config"
+	"github.com/nikarpoff/audio-streamer/internal/audio"
+	"github.com/nikarpoff/audio-streamer/internal/config"
 )
 
 func main() {

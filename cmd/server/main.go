@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/nikarpoff/music-repetition-platform/internal/network"
+	"github.com/nikarpoff/audio-streamer/internal/network"
 )
 
 var addr = flag.String("addr", ":8080", "http service address")

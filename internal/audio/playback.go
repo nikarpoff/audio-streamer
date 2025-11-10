@@ -7,7 +7,7 @@ import (
 	"log"
 
 	"github.com/ebitengine/oto/v3"
-	"github.com/nikarpoff/music-repetition-platform/internal/config"
+	"github.com/nikarpoff/audio-streamer/internal/config"
 )
 
 type Playback struct {
