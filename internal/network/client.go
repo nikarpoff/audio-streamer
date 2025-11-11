@@ -59,7 +59,7 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		c.hub.broadcast <- message
+		c.hub.broadcast <- AudioMessage{c, message}
 	}
 }
 
@@ -110,13 +110,19 @@ func (c *Client) writePump() {
 
 // serveWs handles websocket requests from the peer.
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	log.Println("Got new client request. Try update HTTP to WebSocket")
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	log.Println("Protocol successfully updated! Registering new client...")
+
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client
+
+	log.Println("Client registered, forwarding audio started...")
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

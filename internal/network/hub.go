@@ -7,7 +7,7 @@ type Hub struct {
 	clients map[*Client]bool
 
 	// Inbound messages from the clients.
-	broadcast chan []byte
+	broadcast chan AudioMessage
 
 	// Register requests from the clients.
 	register chan *Client
@@ -16,9 +16,15 @@ type Hub struct {
 	unregister chan *Client
 }
 
+// Audio Message includes message data and who send this
+type AudioMessage struct {
+	sender *Client
+	data   []byte
+}
+
 func NewHub() *Hub {
 	return &Hub{
-		broadcast:  make(chan []byte),
+		broadcast:  make(chan AudioMessage),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]bool),
@@ -40,8 +46,12 @@ func (h *Hub) Run() {
 		// We got new broadcast message?
 		case message := <-h.broadcast:
 			for client := range h.clients {
+				if client == message.sender {
+					continue
+				}
+
 				select {
-				case client.send <- message:
+				case client.send <- message.data:
 				default:
 					// Client is unavailable
 					close(client.send)
