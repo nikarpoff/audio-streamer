@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gordonklaus/portaudio"
 	"github.com/nikarpoff/audio-streamer/internal/config"
@@ -17,13 +18,16 @@ type Capture struct {
 	cancel context.CancelFunc
 }
 
-func NewCapture(cfg *config.AudioConfig) (*Capture, error) {
+func NewCapture(cfg *config.AudioConfig, logPerfomance bool) (*Capture, error) {
 	// Initialize PortAudio
 	if err := portaudio.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize portaudio: %w", err)
 	}
 
 	buffer := make(chan []int16, 100) // Bufferized audiodata channel
+	captureStats := Metric{}
+	last := time.Now()
+	var dt time.Duration
 
 	// Create capture stream
 	stream, err := portaudio.OpenDefaultStream(
@@ -38,6 +42,11 @@ func NewCapture(cfg *config.AudioConfig) (*Capture, error) {
 			select {
 			case buffer <- data:
 				// Data was succesfully sent!
+				if logPerfomance {
+					dt = time.Since(last)
+					captureStats.Add(dt)
+					last = time.Now()
+				}
 			default:
 				// Skip data (backpressure)
 				log.Println("Capture buffer full, dropping audio data")
@@ -50,6 +59,10 @@ func NewCapture(cfg *config.AudioConfig) (*Capture, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	if logPerfomance {
+		go Run(&captureStats, "Capture->Buffer", 1)
+	}
 
 	return &Capture{
 		stream: stream,

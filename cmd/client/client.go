@@ -24,7 +24,7 @@ func main() {
 	cfg := config.DefaultConfig()
 
 	// Create audio capture and playback
-	capture, err := audio.NewCapture(cfg)
+	capture, err := audio.NewCapture(cfg, false)
 	if err != nil {
 		log.Fatal("Failed to create capture:", err)
 	}
