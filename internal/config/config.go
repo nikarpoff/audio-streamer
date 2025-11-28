@@ -11,7 +11,7 @@ func DefaultConfig() *AudioConfig {
 	return &AudioConfig{
 		SampleRate: 44100,
 		Channels:   1, // use mono for quick work
-		BufferSize: 1024,
+		BufferSize: 512,
 		BitDepth:   16,
 	}
 }

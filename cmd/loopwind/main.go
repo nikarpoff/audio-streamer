@@ -3,102 +3,63 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/gordonklaus/portaudio"
-)
-
-const (
-	sampleRate      = 44100
-	framesPerBuffer = 256
-	channels        = 2
+	"github.com/nikarpoff/audio-streamer/internal/audio"
+	"github.com/nikarpoff/audio-streamer/internal/config"
 )
 
 func main() {
-	// Инициализация PortAudio
-	if err := portaudio.Initialize(); err != nil {
-		log.Fatal("Ошибка инициализации PortAudio:", err)
-	}
-	defer portaudio.Terminate()
+	cfg := config.DefaultConfig()
 
-	// Получение списка устройств
-	devices, err := portaudio.Devices()
+	if err := audio.InitializePortaudio(); err != nil {
+		log.Fatal("Initialization PortAudio error!:", err)
+	}
+	devices := audio.GetDevices()
+
+	// Show all devices
+	for _, device := range devices {
+		fmt.Printf("%s Device: %s\n", device.HostApi.Type, device.Name)
+	}
+
+	audioStream, err := audio.NewAudioStream(cfg, devices[3], devices[8])
 	if err != nil {
-		log.Fatal("Ошибка получения устройств:", err)
+		log.Fatal("Failed to create audio stream:", err)
+	}
+	defer audioStream.Stop() // defer call closing
+
+	// Try to start record/playback
+	if err := audioStream.Start(); err != nil {
+		log.Fatal("Failed to start record/playback:", err)
 	}
 
-	// Поиск ASIO устройств
-	// var asioDevice *portaudio.DeviceInfo
-	// for _, device := range devices {
-	// 	if device.HostApi.Type == portaudio.HostApiType(portaudio.ASIO) {
-	// 		fmt.Printf("ASIO устройство: %s\n", device.Name)
-	// 		asioDevice = device
-	// 		break
-	// 	} else {
-	// 		fmt.Printf("%s Устройство: %s\n", device.HostApi.Type, device.Name)
-	// 	}
-	// }
+	log.Println("Loopback test started - you should hear your microphone")
+	log.Println("Press Ctrl+C to stop")
 
-	// if asioDevice == nil {
-	// 	// log.Fatal("ASIO устройства не найдены")
-	// 	asioDevice = devices[2]
-	// }
+	sigChan := make(chan os.Signal, 1) // buffer with one signal
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Настройка параметров потока
-	streamParams := portaudio.StreamParameters{
-		Input: portaudio.StreamDeviceParameters{
-			Device:   devices[3],
-			Channels: 1,
-			Latency:  devices[3].DefaultLowInputLatency,
-		},
-		Output: portaudio.StreamDeviceParameters{
-			Device:   devices[8],
-			Channels: 2,
-			Latency:  devices[8].DefaultLowOutputLatency,
-		},
-		SampleRate:      sampleRate,
-		FramesPerBuffer: framesPerBuffer,
-	}
+	running := true
+	for running {
+		select {
+		// Try to recieve data from capture channel
+		case data, ok := <-audioStream.InputBuffer:
+			if !ok {
+				log.Println("Recieved not ok status from InputBuffer! Stop recording!")
+				running = false
+				break
+			}
 
-	// Создание буферов
-	inputBuffer := make([]float32, framesPerBuffer*channels)
-	outputBuffer := make([]float32, framesPerBuffer*channels)
-
-	// Создание и открытие потока
-	stream, err := portaudio.OpenStream(streamParams, inputBuffer, outputBuffer)
-	if err != nil {
-		log.Fatal("Ошибка открытия потока:", err)
-	}
-	defer stream.Close()
-
-	// Запуск потока
-	if err := stream.Start(); err != nil {
-		log.Fatal("Ошибка запуска потока:", err)
-	}
-
-	for {
-		// Чтение входных данных
-		if err := stream.Read(); err != nil {
-			log.Printf("Ошибка чтения: %v", err)
-			continue
+			// If recieved then write into playback channel
+			audioStream.OutputBuffer <- data
+		case <-sigChan:
+			audioStream.StopCapture <- os.Interrupt
+			audioStream.StopPlayback <- os.Interrupt
+			running = false
 		}
-
-		// Loopback - копируем вход на выход
-		copy(outputBuffer, inputBuffer)
-
-		// Запись выходных данных
-		if err := stream.Write(); err != nil {
-			log.Printf("Ошибка записи: %v", err)
-			continue
-		}
-
-		// Небольшая пауза для снижения нагрузки на CPU
-		// time.Sleep(1 * time.Millisecond)
 	}
 
-	fmt.Println("Запись и воспроизведение запущены... Нажмите Enter для остановки")
-	fmt.Scanln()
-
-	if err := stream.Stop(); err != nil {
-		log.Fatal("Ошибка остановки потока:", err)
-	}
+	close(sigChan)
 }
