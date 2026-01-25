@@ -1,4 +1,13 @@
 @echo off
-set CGO_CFLAGS=-IF:/vcpkg/installed/x64-windows/include
-set CGO_LDFLAGS=-LF:/vcpkg/installed/x64-windows/lib -lportaudio
-go run main.go
+set PATH=V:\portaudio\bin;C:\mingw64\bin;%PATH%
+
+set CGO_ENABLED=1
+set GOOS=windows
+set GOARCH=amd64
+
+set CGO_CFLAGS=-IV:/portaudio/include -D_WIN32_WINNT=0x0600
+set CGO_LDFLAGS=-LV:/portaudio/lib -lportaudio -lwinmm -lole32 -luuid -lksuser
+
+set PKG_CONFIG=
+
+go run -tags portaudio main.go

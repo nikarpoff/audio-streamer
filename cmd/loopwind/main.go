@@ -17,14 +17,36 @@ func main() {
 	if err := audio.InitializePortaudio(); err != nil {
 		log.Fatal("Initialization PortAudio error!:", err)
 	}
-	devices := audio.GetDevices()
+	hostApis := audio.GetAPIS()
 
-	// Show all devices
-	for _, device := range devices {
-		fmt.Printf("%s Device: %s\n", device.HostApi.Type, device.Name)
+	fmt.Printf("Available API hosts:\n")
+	for i, hostApi := range hostApis {
+		fmt.Printf("%d: %s (%s)\n", i, hostApi.Type, hostApi.Name)
 	}
 
-	audioStream, err := audio.NewAudioStream(cfg, devices[3], devices[8])
+	devices := audio.GetDevices()
+	totalDevices := len(devices)
+
+	// Show all devices
+	fmt.Printf("Available devices:\n")
+	for i, device := range devices {
+		fmt.Printf("%d: %s Device: %s\n", i, device.HostApi.Type, device.Name)
+	}
+
+	// Ask user to prefered audio Input/Output
+	var captureDeviceIdx int
+	var playbackDeviceIdx int
+	fmt.Printf("\nPlease, select prefered Input and Output devices indexes, e.g. >> 0 1: ")
+
+	_, err := fmt.Scan(&captureDeviceIdx, &playbackDeviceIdx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if captureDeviceIdx >= totalDevices || playbackDeviceIdx >= totalDevices {
+		log.Fatal("Invalid indices! Max index is ", totalDevices)
+	}
+
+	audioStream, err := audio.NewAudioStream(cfg, devices[captureDeviceIdx], devices[playbackDeviceIdx])
 	if err != nil {
 		log.Fatal("Failed to create audio stream:", err)
 	}

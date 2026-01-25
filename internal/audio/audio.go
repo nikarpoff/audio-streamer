@@ -34,6 +34,16 @@ func GetDevices() []*portaudio.DeviceInfo {
 	return devices
 }
 
+func GetAPIS() []*portaudio.HostApiInfo {
+	fmt.Println("Host APIs:")
+	hostApis, err := portaudio.HostApis()
+	if err != nil {
+		log.Fatal("faied to get host APIs list:", err)
+		return nil
+	}
+	return hostApis
+}
+
 func NewAudioStream(cfg *config.AudioConfig, captureDevice *portaudio.DeviceInfo, playbackDevice *portaudio.DeviceInfo) (*AudioStream, error) {
 	// Portaudio Should be initialized!
 	streamParams := portaudio.StreamParameters{
