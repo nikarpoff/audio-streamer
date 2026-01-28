@@ -1,7 +1,7 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -10,39 +10,50 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/nikarpoff/audio-streamer/internal/audio"
 	"github.com/nikarpoff/audio-streamer/internal/config"
-)
-
-var (
-	serverAddr = flag.String("server", "ws://localhost:8080/ws", "WebSocket server address")
+	"github.com/nikarpoff/audio-streamer/internal/utils"
 )
 
 func main() {
-	flag.Parse()
+	utils.PrintWelcome("Client")
 
-	log.SetFlags(0)
+	if err := audio.InitializePortaudio(); err != nil {
+		log.Fatal("Initialization PortAudio error!:", err)
+	}
+
+	var socketAddress string
+	fmt.Printf("Please, select server's socket address. By default 'ws://kbks:7001/ws' [enter for default]: ")
+	fmt.Scan(&socketAddress)
+	fmt.Println()
+
+	isValidAddress := utils.IsValidWebSocketURL(socketAddress)
+
+	if !isValidAddress {
+		fmt.Printf("You provide invalid server's socket address... Please, try again")
+		return
+	}
 
 	cfg := config.DefaultConfig()
 
-	// Create audio capture and playback
-	capture, err := audio.NewCapture(cfg)
-	if err != nil {
-		log.Fatal("Failed to create capture:", err)
-	}
-	defer capture.Stop()
+	// Select input and output devices
+	utils.ShowHosts()
+	devices := audio.GetDevices()
+	utils.ShowDevices(devices)
+	inputDevice, outputDevice := utils.SelectDevice(devices)
 
-	playback, err := audio.NewPlayback(cfg)
+	// Create audio capture and playback
+	audioStream, err := audio.NewAudioStream(cfg, inputDevice, outputDevice)
 	if err != nil {
-		log.Fatal("Failed to create playback:", err)
+		log.Fatal("Failed to create audio stream:", err)
 	}
-	defer playback.Stop()
+	defer audioStream.Stop() // defer call closing
 
 	// Parse server URL
-	u, err := url.Parse(*serverAddr)
+	u, err := url.Parse(socketAddress)
 	if err != nil {
 		log.Fatal("Failed to parse server address:", err)
 	}
 
-	log.Printf("Connecting to %s", u.String())
+	log.Printf("\nConnecting to %s", u.String())
 
 	// Connect to WebSocket server
 	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -53,10 +64,13 @@ func main() {
 
 	log.Println("Connected to server. Starting audio streams...")
 
-	// Start capture
-	if err := capture.Start(); err != nil {
-		log.Fatal("Failed to start capture:", err)
+	// Try to start record/playback
+	if err := audioStream.Start(); err != nil {
+		log.Fatal("Failed to start record/playback:", err)
 	}
+
+	log.Println("You joined to server! Other clients can hear your microphone!")
+	log.Println("Press Ctrl+C to stop")
 
 	// Handle incoming audio messages
 	go func() {
@@ -73,7 +87,7 @@ func main() {
 				for i := 0; i < len(samples); i++ {
 					samples[i] = int16(data[i*2]) | (int16(data[i*2+1]) << 8)
 				}
-				playback.Write(samples)
+				audioStream.OutputBuffer <- samples
 			}
 		}
 	}()
@@ -81,7 +95,7 @@ func main() {
 	// Send captured audio
 	go func() {
 		for {
-			data, ok := <-capture.Buffer
+			data, ok := <-audioStream.InputBuffer
 			if !ok {
 				return
 			}
@@ -107,4 +121,5 @@ func main() {
 
 	<-interrupt
 	log.Println("Shutting down...")
+	close(interrupt)
 }
