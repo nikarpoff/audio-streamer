@@ -8,54 +8,59 @@ import (
 
 	"github.com/nikarpoff/audio-streamer/internal/audio"
 	"github.com/nikarpoff/audio-streamer/internal/config"
+	"github.com/nikarpoff/audio-streamer/internal/utils"
 )
 
 func main() {
+	utils.PrintWelcome("Test Loopback")
+
 	cfg := config.DefaultConfig()
 
-	// Create capture object
-	capture, err := audio.NewCapture(cfg)
-	if err != nil {
-		log.Fatal("Failed to create capture:", err)
+	if err := audio.InitializePortaudio(); err != nil {
+		log.Fatal("Initialization PortAudio error!:", err)
 	}
-	defer capture.Stop() // defer call closing
 
-	// Create playback object
-	playback, err := audio.NewPlayback(cfg)
+	// Select input and output devices
+	utils.ShowHosts()
+	devices := audio.GetDevices()
+	utils.ShowDevices(devices)
+	inputDevice, outputDevice := utils.SelectDevice(devices)
+
+	audioStream, err := audio.NewAudioStream(cfg, inputDevice, outputDevice)
 	if err != nil {
-		log.Fatal("Failed to create playback:", err)
+		log.Fatal("Failed to create audio stream:", err)
 	}
-	defer playback.Stop() // defer call closing
+	defer audioStream.Stop() // defer call closing
 
-	if err := capture.Start(); err != nil {
-		log.Fatal("Failed to start capture:", err)
+	// Try to start record/playback
+	if err := audioStream.Start(); err != nil {
+		log.Fatal("Failed to start record/playback:", err)
 	}
 
 	log.Println("Loopback test started - you should hear your microphone")
 	log.Println("Press Ctrl+C to stop")
 
-	// Handling interruption
 	sigChan := make(chan os.Signal, 1) // buffer with one signal
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	running := true
-	for running {
-		select {
-		// Try to recieve data from capture channel
-		case data, ok := <-capture.Buffer:
+	// Loopback
+	go func() {
+		for {
+			data, ok := <-audioStream.InputBuffer
 			if !ok {
-				running = false
-				break
+				log.Println("Recieved not ok status from InputBuffer! Stop recording!")
+				return
 			}
 
-			// If recieved then write into playback channel
-			playback.Write(data)
-
-		case <-sigChan:
-			running = false
+			audioStream.OutputBuffer <- data
 		}
-	}
+	}()
 
-	close(sigChan)
-	log.Println("Loopback test stopped")
+	// Wait for interrupt signal
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+
+	<-interrupt
+	log.Println("Shutting down...")
+	close(interrupt)
 }
