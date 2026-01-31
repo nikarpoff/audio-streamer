@@ -10,28 +10,35 @@ import (
 )
 
 type AudioStream struct {
-	stream       *portaudio.Stream
-	config       *config.AudioConfig
-	inputBuffer  []int16
-	outputBuffer []int16
-	InputBuffer  chan []int16
-	OutputBuffer chan []int16
-	StopPlayback chan os.Signal
-	StopCapture  chan os.Signal
+	stream       *portaudio.Stream   // PortAudio Stream
+	config       *config.AudioConfig // Config (sr, buffer size)
+	inputBuffer  []int16             // Internal portaudio buffer
+	outputBuffer []int16             // Internal portaudio buffer
+	InputBuffer  chan []int16        // External buffer for audio stream (streamer <-> websocket)
+	OutputBuffer chan []int16        // External buffer for audio stream (streamer <-> websocket)
+	StopPlayback chan os.Signal      // Signal to stop playing
+	StopCapture  chan os.Signal      // Signal to stop capture
 }
 
 func InitializePortaudio() error {
 	return portaudio.Initialize()
 }
 
-func GetDevices() []*portaudio.DeviceInfo {
+func GetDevices(hostApi *portaudio.HostApiInfo) []*portaudio.DeviceInfo {
 	devices, err := portaudio.Devices()
 	if err != nil {
 		log.Fatal("faied to get devices list:", err)
 		return nil
 	}
 
-	return devices
+	requestedDevices := make([]*portaudio.DeviceInfo, 0, 8)
+	for _, device := range devices {
+		if device.HostApi.Name == hostApi.Name {
+			requestedDevices = append(requestedDevices, device)
+		}
+	}
+
+	return requestedDevices
 }
 
 func GetAPIS() []*portaudio.HostApiInfo {
@@ -49,12 +56,12 @@ func NewAudioStream(cfg *config.AudioConfig, captureDevice *portaudio.DeviceInfo
 	streamParams := portaudio.StreamParameters{
 		Input: portaudio.StreamDeviceParameters{
 			Device:   captureDevice,
-			Channels: cfg.Channels,
+			Channels: cfg.InputChannels,
 			Latency:  captureDevice.DefaultLowInputLatency,
 		},
 		Output: portaudio.StreamDeviceParameters{
 			Device:   playbackDevice,
-			Channels: 1,
+			Channels: cfg.OutputChannels,
 			Latency:  playbackDevice.DefaultLowOutputLatency,
 		},
 		SampleRate:      cfg.SampleRate,

@@ -1,17 +1,19 @@
 package config
 
 type AudioConfig struct {
-	SampleRate float64
-	Channels   int
-	BufferSize int
-	BitDepth   int
+	InputChannels  int
+	OutputChannels int
+	SampleRate     float64
+	BufferSize     int
+	BitDepth       int
 }
 
 func DefaultConfig() *AudioConfig {
 	return &AudioConfig{
-		SampleRate: 44100,
-		Channels:   1, // use mono for quick work
-		BufferSize: 512,
-		BitDepth:   16,
+		InputChannels:  2,
+		OutputChannels: 2,
+		SampleRate:     44100,
+		BufferSize:     512,
+		BitDepth:       16,
 	}
 }

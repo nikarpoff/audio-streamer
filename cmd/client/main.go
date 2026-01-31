@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -20,25 +19,26 @@ func main() {
 		log.Fatal("Initialization PortAudio error!:", err)
 	}
 
-	var socketAddress string
-	fmt.Printf("Please, select server's socket address. By default 'ws://kbks:7001/ws' [enter for default]: ")
-	fmt.Scan(&socketAddress)
-	fmt.Println()
-
-	isValidAddress := utils.IsValidWebSocketURL(socketAddress)
-
-	if !isValidAddress {
-		fmt.Printf("You provide invalid server's socket address... Please, try again")
-		return
-	}
+	socketAddress := utils.SelectAddress()
 
 	cfg := config.DefaultConfig()
 
+	// Select audio backend
+	hostApis := audio.GetAPIS()
+	utils.ShowHosts(hostApis)
+	hostApi := utils.SelectHostAPI(hostApis)
+
 	// Select input and output devices
-	utils.ShowHosts()
-	devices := audio.GetDevices()
+	devices := audio.GetDevices(hostApi)
 	utils.ShowDevices(devices)
 	inputDevice, outputDevice := utils.SelectDevice(devices)
+
+	// Show configuration
+	utils.ShowAudioParams(cfg, inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
+
+	// Select optimal parameters
+	cfg = utils.SelectConfig(inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
+	utils.ShowAudioParams(cfg, cfg.InputChannels, cfg.OutputChannels)
 
 	// Create audio capture and playback
 	audioStream, err := audio.NewAudioStream(cfg, inputDevice, outputDevice)

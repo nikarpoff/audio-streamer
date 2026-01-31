@@ -12,4 +12,11 @@ set PKG_CONFIG=
 
 go build -tags portaudio -o client.exe
 
-copy /Y "V:\portaudio\bin\libportaudio.dll" "libportaudio.dll"
+if exist "dist" rmdir /s /q dist
+mkdir dist
+copy client.exe dist\
+rm client.exe
+copy "V:\portaudio\bin\libportaudio.dll" dist\
+copy "C:\mingw64\bin\libstdc++-6.dll" dist\
+copy "C:\mingw64\bin\libgcc_s_seh-1.dll" dist\
+copy "C:\mingw64\bin\libwinpthread-1.dll" dist\
