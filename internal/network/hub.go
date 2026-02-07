@@ -44,9 +44,9 @@ func (h *Hub) Run(conn *net.UDPConn) {
 		case message := <-h.broadcast:
 			for key, client := range h.clients {
 				// Don't send message to sender
-				// if message.Sender != nil && key == message.Sender.String() {
-				// 	continue
-				// }
+				if message.Sender != nil && key == message.Sender.String() {
+					continue
+				}
 
 				// Send message to client
 				if _, err := conn.WriteToUDP(message.Data, client); err != nil {

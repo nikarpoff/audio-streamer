@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net"
-	"net/url"
 	"os"
 	"os/signal"
 
@@ -19,7 +18,7 @@ func main() {
 		log.Fatal("Initialization PortAudio error!:", err)
 	}
 
-	socketAddress := utils.SelectAddress()
+	serverAddress := utils.SelectAddress()
 
 	cfg := config.DefaultConfig()
 
@@ -47,16 +46,9 @@ func main() {
 	}
 	defer audioStream.Stop() // defer call closing
 
-	// Parse server URL
-	u, err := url.Parse(socketAddress)
-	if err != nil {
-		log.Fatal("Failed to parse server address:", err)
-	}
-	host := u.Host
+	log.Printf("\nConnecting to %s", serverAddress)
 
-	log.Printf("\nConnecting to %s", u.String())
-
-	serverAddr, err := net.ResolveUDPAddr("udp", host)
+	serverAddr, err := net.ResolveUDPAddr("udp", serverAddress)
 	if err != nil {
 		log.Fatal("Failed to resolve UDP address:", err)
 	}

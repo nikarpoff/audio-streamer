@@ -118,13 +118,6 @@ func SelectAddress() string {
 	if socketAddress == "" {
 		socketAddress = defaultAddress
 		fmt.Printf("Using default address: %s\n", socketAddress)
-	} else {
-		isValidAddress := IsValidServerAddress(socketAddress)
-
-		if !isValidAddress {
-			log.Fatal("You provide invalid server's socket address... Please, try again")
-			return ""
-		}
 	}
 
 	return socketAddress
