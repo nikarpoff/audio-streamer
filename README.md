@@ -47,3 +47,11 @@ cd ./cmd/loopwind
 ./run.bat
 ```
 
+## Default server from environment
+The client reads `AUDIO_STREAMER_SERVER_ADDR` from process environment.
+
+```
+AUDIO_STREAMER_SERVER_ADDR=127.0.0.1:8080
+```
+
+If the variable is missing, fallback is `127.0.0.1:8080`.

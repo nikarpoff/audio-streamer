@@ -1,61 +1,56 @@
 package network
 
-// Hub maintains the set of active clients and broadcasts messages to the
-// clients.
-type Hub struct {
-	// Registered clients.
-	clients map[*Client]bool
-
-	// Inbound messages from the clients.
-	broadcast chan AudioMessage
-
-	// Register requests from the clients.
-	register chan *Client
-
-	// Unregister requests from clients.
-	unregister chan *Client
-}
+import (
+	"net"
+)
 
 // Audio Message includes message data and who send this
 type AudioMessage struct {
-	sender *Client
-	data   []byte
+	Sender *net.UDPAddr
+	Data   []byte
+}
+
+// Hub maintains the set of active clients and broadcasts messages to the
+type Hub struct {
+	clients map[string]*net.UDPAddr
+
+	broadcast chan AudioMessage
+	register  chan *net.UDPAddr
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		broadcast:  make(chan AudioMessage),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		clients:   make(map[string]*net.UDPAddr),
+		broadcast: make(chan AudioMessage, 1024),
+		register:  make(chan *net.UDPAddr, 1024),
 	}
 }
 
-func (h *Hub) Run() {
+func (h *Hub) Register(client *net.UDPAddr) {
+	h.register <- client
+}
+
+func (h *Hub) Broadcast(message AudioMessage) {
+	h.broadcast <- message
+}
+
+func (h *Hub) Run(conn *net.UDPConn) {
 	for {
 		select {
 		// We got new client to register?
 		case client := <-h.register:
-			h.clients[client] = true
-		// We got old client to unregister?
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.send)
-			}
+			h.clients[client.String()] = client
 		// We got new broadcast message?
 		case message := <-h.broadcast:
-			for client := range h.clients {
-				if client == message.sender {
-					continue
-				}
+			for key, client := range h.clients {
+				// Don't send message to sender
+				// if message.Sender != nil && key == message.Sender.String() {
+				// 	continue
+				// }
 
-				select {
-				case client.send <- message.data:
-				default:
-					// Client is unavailable
-					close(client.send)
-					delete(h.clients, client)
+				// Send message to client
+				if _, err := conn.WriteToUDP(message.Data, client); err != nil {
+					delete(h.clients, key)
 				}
 			}
 		}

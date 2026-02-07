@@ -4,15 +4,15 @@ import (
 	"net/url"
 )
 
-func IsValidWebSocketURL(urlStr string) bool {
+func IsValidServerAddress(urlStr string) bool {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return false
 	}
 
-	// Check schema (ws:// or wss://)
-	if u.Scheme != "ws" && u.Scheme != "wss" {
-		return false
+	// Check schema
+	if u.Scheme == "" {
+		return u.Host != "" || u.Path != ""
 	}
 
 	// Check host
@@ -20,7 +20,7 @@ func IsValidWebSocketURL(urlStr string) bool {
 		return false
 	}
 
-	return true
+	return u.Host != ""
 }
 
 func IsValidBoundedInteger(value int, minValue int, maxValue int) bool {

@@ -109,16 +109,17 @@ func SelectDevice(devices []*portaudio.DeviceInfo) (*portaudio.DeviceInfo, *port
 }
 
 func SelectAddress() string {
-	fmt.Printf("Please, select server's socket address. By default 'ws://kbks.org:8080/ws' [enter for default]: ")
+	defaultAddress := config.DefaultServerAddress()
+	fmt.Printf("Please, select server's socket address. By default '%s' [enter for default]: ", defaultAddress)
 	var input string
 	fmt.Scanln(&input)
 	socketAddress := strings.TrimSpace(input)
 
 	if socketAddress == "" {
-		socketAddress = "ws://kbks.org:8080/ws"
+		socketAddress = defaultAddress
 		fmt.Printf("Using default address: %s\n", socketAddress)
 	} else {
-		isValidAddress := IsValidWebSocketURL(socketAddress)
+		isValidAddress := IsValidServerAddress(socketAddress)
 
 		if !isValidAddress {
 			log.Fatal("You provide invalid server's socket address... Please, try again")
