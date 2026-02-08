@@ -40,6 +40,6 @@ func main() {
 
 		packet := make([]byte, n)
 		copy(packet, buffer[:n])
-		hub.Broadcast(network.AudioMessage{Sender: clientAddr, Data: packet})
+		hub.Broadcast(clientAddr, &packet)
 	}
 }
