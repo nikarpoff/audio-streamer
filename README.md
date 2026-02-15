@@ -55,3 +55,21 @@ AUDIO_STREAMER_SERVER_ADDR=127.0.0.1:8080
 ```
 
 If the variable is missing, fallback is `127.0.0.1:8080`.
+
+## CI/CD (GitHub Actions)
+On each push to `main`, workflow `.github/workflows/server-cicd.yml`:
+1. runs hub test (`internal/network`)
+2. verifies `cmd/server` package builds
+3. builds Linux server binary
+4. copies binary to remote server via SSH
+5. restarts service (or runs binary with `nohup` if service name is not provided)
+
+Required GitHub repository secrets:
+- `SSH_HOST`
+- `SSH_USER`
+- `SSH_PRIVATE_KEY`
+- `DEPLOY_PATH` (e.g. `/opt/audio-streamer`)
+
+Optional secrets:
+- `SSH_PORT` (defaults to `22`)
+- `SERVER_SERVICE_NAME` (if using systemd service restart)
