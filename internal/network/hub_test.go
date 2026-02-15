@@ -19,7 +19,6 @@ func TestHubBroadcastSkipsSenderAndDeliversToOtherClient(t *testing.T) {
 	defer serverConn.Close()
 
 	hub := NewHub()
-	go hub.Run(serverConn)
 
 	listenerA, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 	if err != nil {
@@ -33,11 +32,14 @@ func TestHubBroadcastSkipsSenderAndDeliversToOtherClient(t *testing.T) {
 	}
 	defer listenerB.Close()
 
-	hub.Register(listenerA.LocalAddr().(*net.UDPAddr))
-	hub.Register(listenerB.LocalAddr().(*net.UDPAddr))
+	hub.registerClient(listenerA.LocalAddr().(*net.UDPAddr), serverConn)
+	hub.registerClient(listenerB.LocalAddr().(*net.UDPAddr), serverConn)
 
 	payload := []byte{1, 2, 3, 4}
-	hub.Broadcast(listenerA.LocalAddr().(*net.UDPAddr), &payload)
+	hub.broadcastPacket(audioMessage{
+		sender: listenerA.LocalAddr().(*net.UDPAddr),
+		data:   payload,
+	})
 
 	_ = listenerB.SetReadDeadline(time.Now().Add(2 * time.Second))
 	buf := make([]byte, 16)
