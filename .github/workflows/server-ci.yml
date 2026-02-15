@@ -5,7 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
+permissions:
+  contents: read
+  
 jobs:
   hub-test:
     name: Test hub and server packages
@@ -30,6 +34,7 @@ jobs:
     name: Build and deploy server
     runs-on: ubuntu-latest
     needs: hub-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout repository
