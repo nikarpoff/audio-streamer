@@ -2,11 +2,10 @@ package main
 
 import (
 	"log"
-	"net/url"
+	"net"
 	"os"
 	"os/signal"
 
-	"github.com/gorilla/websocket"
 	"github.com/nikarpoff/audio-streamer/internal/audio"
 	"github.com/nikarpoff/audio-streamer/internal/config"
 	"github.com/nikarpoff/audio-streamer/internal/utils"
@@ -19,7 +18,7 @@ func main() {
 		log.Fatal("Initialization PortAudio error!:", err)
 	}
 
-	socketAddress := utils.SelectAddress()
+	serverAddress := utils.SelectAddress()
 
 	cfg := config.DefaultConfig()
 
@@ -47,18 +46,17 @@ func main() {
 	}
 	defer audioStream.Stop() // defer call closing
 
-	// Parse server URL
-	u, err := url.Parse(socketAddress)
+	log.Printf("\nConnecting to %s", serverAddress)
+
+	serverAddr, err := net.ResolveUDPAddr("udp", serverAddress)
 	if err != nil {
-		log.Fatal("Failed to parse server address:", err)
+		log.Fatal("Failed to resolve UDP address:", err)
 	}
 
-	log.Printf("\nConnecting to %s", u.String())
-
-	// Connect to WebSocket server
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	// Connect to server
+	conn, err := net.DialUDP("udp", nil, serverAddr)
 	if err != nil {
-		log.Fatal("Failed to connect to server:", err)
+		log.Fatal("Failed to connect to UDP server:", err)
 	}
 	defer conn.Close()
 
@@ -74,21 +72,20 @@ func main() {
 
 	// Handle incoming audio messages
 	go func() {
+		buffer := make([]byte, 2048)
 		for {
-			messageType, data, err := conn.ReadMessage()
+			n, err := conn.Read(buffer)
 			if err != nil {
 				log.Println("Read error:", err)
 				return
 			}
 
-			if messageType == websocket.BinaryMessage {
-				// Convert bytes back to int16 samples
-				samples := make([]int16, len(data)/2)
-				for i := 0; i < len(samples); i++ {
-					samples[i] = int16(data[i*2]) | (int16(data[i*2+1]) << 8)
-				}
-				audioStream.OutputBuffer <- samples
+			data := buffer[:n]
+			samples := make([]int16, len(data)/2)
+			for i := 0; i < len(samples); i++ {
+				samples[i] = int16(data[i*2]) | (int16(data[i*2+1]) << 8)
 			}
+			audioStream.OutputBuffer <- samples
 		}
 	}()
 
@@ -107,7 +104,7 @@ func main() {
 				byteData[i*2+1] = byte(sample >> 8)
 			}
 
-			err := conn.WriteMessage(websocket.BinaryMessage, byteData)
+			_, err := conn.Write(byteData)
 			if err != nil {
 				log.Println("Write error:", err)
 				return
