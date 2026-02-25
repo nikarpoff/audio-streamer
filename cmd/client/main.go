@@ -8,8 +8,11 @@ import (
 
 	"github.com/nikarpoff/audio-streamer/internal/audio"
 	"github.com/nikarpoff/audio-streamer/internal/config"
+	"github.com/nikarpoff/audio-streamer/internal/protocol"
 	"github.com/nikarpoff/audio-streamer/internal/utils"
 )
+
+const udpSocketBufferSize = 1 << 20 // 1 MiB
 
 func main() {
 	utils.PrintWelcome("Client")
@@ -33,11 +36,11 @@ func main() {
 	inputDevice, outputDevice := utils.SelectDevice(devices)
 
 	// Show configuration
-	utils.ShowAudioParams(cfg, inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
+	utils.ShowAudioParams(cfg, int(inputDevice.DefaultSampleRate), inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
 
 	// Select optimal parameters
 	cfg = utils.SelectConfig(inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
-	utils.ShowAudioParams(cfg, cfg.InputChannels, cfg.OutputChannels)
+	utils.ShowAudioParams(cfg, int(cfg.SampleRate), cfg.InputChannels, cfg.OutputChannels)
 
 	// Create audio capture and playback
 	audioStream, err := audio.NewAudioStream(cfg, inputDevice, outputDevice)
@@ -60,6 +63,9 @@ func main() {
 	}
 	defer conn.Close()
 
+	_ = conn.SetReadBuffer(udpSocketBufferSize)
+	_ = conn.SetWriteBuffer(udpSocketBufferSize)
+
 	log.Println("Connected to server. Starting audio streams...")
 
 	// Try to start record/playback
@@ -72,7 +78,11 @@ func main() {
 
 	// Handle incoming audio messages
 	go func() {
-		buffer := make([]byte, 2048)
+		buffer := make([]byte, 4096)
+
+		var lastSequence uint32
+		hasSequence := false
+
 		for {
 			n, err := conn.Read(buffer)
 			if err != nil {
@@ -80,17 +90,30 @@ func main() {
 				return
 			}
 
-			data := buffer[:n]
-			samples := make([]int16, len(data)/2)
-			for i := 0; i < len(samples); i++ {
-				samples[i] = int16(data[i*2]) | (int16(data[i*2+1]) << 8)
+			sequence, samples, err := protocol.DecodeAudioPacket(buffer[:n])
+			if err != nil {
+				continue
 			}
-			audioStream.OutputBuffer <- samples
+
+			if hasSequence && !protocol.SequenceAhead(sequence, lastSequence) {
+				continue
+			}
+			lastSequence = sequence
+			hasSequence = true
+
+			select {
+			case audioStream.OutputBuffer <- samples:
+			default:
+				<-audioStream.OutputBuffer
+				audioStream.OutputBuffer <- samples
+			}
 		}
 	}()
 
 	// Send captured audio
 	go func() {
+		sequence := uint32(1)
+
 		for {
 			data, ok := <-audioStream.InputBuffer
 			if !ok {
@@ -98,13 +121,10 @@ func main() {
 			}
 
 			// Convert int16 samples to bytes
-			byteData := make([]byte, len(data)*2)
-			for i, sample := range data {
-				byteData[i*2] = byte(sample)
-				byteData[i*2+1] = byte(sample >> 8)
-			}
+			packet := protocol.EncodeAudioPacket(sequence, data)
+			sequence++
 
-			_, err := conn.Write(byteData)
+			_, err := conn.Write(packet)
 			if err != nil {
 				log.Println("Write error:", err)
 				return

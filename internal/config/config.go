@@ -12,7 +12,7 @@ func DefaultConfig() *AudioConfig {
 	return &AudioConfig{
 		InputChannels:  2,
 		OutputChannels: 2,
-		SampleRate:     44100,
+		SampleRate:     48000,
 		BufferSize:     512,
 		BitDepth:       16,
 	}

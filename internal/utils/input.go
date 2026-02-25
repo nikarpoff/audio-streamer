@@ -50,13 +50,13 @@ func ShowDevices(devices []*portaudio.DeviceInfo) {
 	}
 }
 
-func ShowAudioParams(cfg *config.AudioConfig, inputChannels int, outputChannels int) {
+func ShowAudioParams(cfg *config.AudioConfig, sampleRate int, inputChannels int, outputChannels int) {
 	// Show all devices
 	fmt.Printf("\n==========================================================\n")
 	fmt.Printf("Current audio stream params:\n")
 	fmt.Printf("\t Capture channels: %d\n", inputChannels)
 	fmt.Printf("\t Play channels: %d\n", outputChannels)
-	fmt.Printf("\t Sample rate: %f\n", int(cfg.SampleRate))
+	fmt.Printf("\t Sample rate: %d\n", sampleRate)
 	fmt.Printf("\t Buffer size: %d\n", cfg.BufferSize)
 	fmt.Printf("\t Bit depth: %d\n", cfg.BitDepth)
 	fmt.Printf("==========================================================\n\n")
@@ -70,7 +70,7 @@ func SelectHostAPI(hostApis []*portaudio.HostApiInfo) *portaudio.HostApiInfo {
 	fmt.Printf("Provide index, e.g. >> 5\n")
 	fmt.Printf(">> ")
 
-	_, err := fmt.Scan(&hostIdx)
+	_, err := fmt.Scanln(&hostIdx)
 	if err != nil {
 		log.Fatal(err)
 		return nil
@@ -91,7 +91,7 @@ func SelectDevice(devices []*portaudio.DeviceInfo) (*portaudio.DeviceInfo, *port
 	fmt.Printf("\nPlease, select prefered Input and Output devices indexes, e.g. >> 0 1\n")
 	fmt.Printf(">> ")
 
-	_, err := fmt.Scan(&captureDeviceIdx, &playbackDeviceIdx)
+	_, err := fmt.Scanln(&captureDeviceIdx, &playbackDeviceIdx)
 	if err != nil {
 		log.Fatal(err)
 		return nil, nil
@@ -140,13 +140,13 @@ func SelectConfig(maxInputChannels int, maxOutputChannels int) *config.AudioConf
 	}
 
 	sampleRate := readInt("Sample rate in Hz", int(defaultConfig.SampleRate))
-	if !IsValidBoundedInteger(outputChannels, 0, 192000) {
+	if !IsValidBoundedInteger(sampleRate, 0, 192000) {
 		fmt.Printf("Invalid sample rate! Select between 0 and %d Hz", 192000)
 		sampleRate = int(defaultConfig.SampleRate)
 	}
 
 	bufferSize := readInt("Buffer size", defaultConfig.BufferSize)
-	if !IsValidBoundedInteger(outputChannels, 0, 2048) {
+	if !IsValidBoundedInteger(bufferSize, 0, 2048) {
 		fmt.Printf("Invalid buffer size! Select between 0 and %d", 2048)
 		bufferSize = defaultConfig.BufferSize
 	}
