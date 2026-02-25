@@ -95,9 +95,9 @@ func (h *Hub) broadcastPacket(message audioMessage) {
 	}
 
 	for key, client := range h.clients {
-		// if key == senderKey {
-		// 	continue
-		// }
+		if key == senderKey {
+			continue
+		}
 
 		select {
 		case client.send <- message.data:
