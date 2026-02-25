@@ -8,14 +8,14 @@ set GOARCH=amd64
 set CGO_CFLAGS=-IV:/portaudio/include -D_WIN32_WINNT=0x0600
 set CGO_LDFLAGS=-LV:/portaudio/lib -lportaudio -lwinmm -lole32 -luuid -lksuser
 
-set PKG_CONFIG=
+set PKG_CONFIG_PATH=V:\portaudio\lib\pkgconfig
 
 go build -tags portaudio -o client.exe
 
 if exist "dist" rmdir /s /q dist
 mkdir dist
 copy client.exe dist\
-rm client.exe
+del client.exe
 copy "V:\portaudio\bin\libportaudio.dll" dist\
 copy "C:\mingw64\bin\libstdc++-6.dll" dist\
 copy "C:\mingw64\bin\libgcc_s_seh-1.dll" dist\
