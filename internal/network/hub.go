@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	clientSendBufferSize = 256
+	clientSendBufferSize = 8
 	clientIdleTimeout    = 30 * time.Second
 	cleanupPeriod        = 5 * time.Second
 )
@@ -35,9 +35,9 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[string]*udpClient),
-		broadcast:  make(chan audioMessage, 1024),
-		register:   make(chan *net.UDPAddr, 1024),
-		unregister: make(chan string, 1024),
+		broadcast:  make(chan audioMessage, 64),
+		register:   make(chan *net.UDPAddr, 64),
+		unregister: make(chan string, 64),
 	}
 }
 
@@ -95,9 +95,9 @@ func (h *Hub) broadcastPacket(message audioMessage) {
 	}
 
 	for key, client := range h.clients {
-		if key == senderKey {
-			continue
-		}
+		// if key == senderKey {
+		// 	continue
+		// }
 
 		select {
 		case client.send <- message.data:

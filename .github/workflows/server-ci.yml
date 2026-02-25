@@ -25,7 +25,10 @@ jobs:
           go-version-file: go.mod
 
       - name: Run hub test
-        run: go test ./internal/network -run TestHubBroadcastSkipsSenderAndDeliversToOtherClient -count=1
+        run: go test ./internal/network -v -count=1
+
+      - name: Run protocol test
+        run: go test ./internal/protocol -v -count=1
 
       - name: Ensure server package builds
         run: go test ./cmd/server

@@ -10,6 +10,8 @@ import (
 
 var addr = flag.String("addr", ":7001", "udp service address")
 
+const udpSocketBufferSize = 1 << 20 // 1 MiB
+
 func main() {
 	flag.Parse()
 
@@ -24,12 +26,15 @@ func main() {
 	}
 	defer conn.Close()
 
+	_ = conn.SetReadBuffer(udpSocketBufferSize)
+	_ = conn.SetWriteBuffer(udpSocketBufferSize)
+
 	hub := network.NewHub()
 	go hub.Run(conn)
 
 	log.Println("UDP server starting on", *addr)
 
-	buffer := make([]byte, 2048)
+	buffer := make([]byte, 4096)
 	for {
 		n, clientAddr, err := conn.ReadFromUDP(buffer)
 		if err != nil {

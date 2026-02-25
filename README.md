@@ -10,7 +10,7 @@ git clone https://github.com/nikarpoff/audio-streamer
 ```
 
 2. Install portaudio with ASIO capabilities:
-2.1. Download ()[ASIO SDK]. Unzip to some package, e.g. C:/ASIOSDK
+2.1. Download [ASIO SDK](https://www.steinberg.net/developers/prorietary-sdk/). Unzip to some package, e.g. C:/ASIOSDK
 
 2.2. Download portaudio-2.0 to some package, e.g. C:/portaudio
 ```
@@ -47,6 +47,19 @@ cd ./cmd/loopwind
 ./run.bat
 ```
 
+## Low-latency tuning notes
+Current defaults are tuned for lower end-to-end latency:
+- sample rate `48000`
+- buffer size `128` frames
+- bounded in-memory queues with packet dropping instead of queue growth
+
+For rehearsal-grade latency (10-20ms target), keep these practical rules:
+1. use wired Ethernet
+2. choose ASIO/CoreAudio/ALSA low-latency devices
+3. keep `buffer size` in range `64..128` if your hardware is stable
+4. run all peers with the same sample rate/channels to avoid resampling
+
+
 ## Default server from environment
 The client reads `AUDIO_STREAMER_SERVER_ADDR` from process environment.
 
@@ -56,13 +69,13 @@ AUDIO_STREAMER_SERVER_ADDR=127.0.0.1:8080
 
 If the variable is missing, fallback is `127.0.0.1:8080`.
 
-## CI/CD (GitHub Actions)
+#### CI/CD (GitHub Actions)
 On each push to `main`, workflow `.github/workflows/server-cicd.yml`:
 1. runs hub test (`internal/network`)
 2. verifies `cmd/server` package builds
 3. builds Linux server binary
 4. copies binary to remote server via SSH
-5. restarts service (or runs binary with `nohup` if service name is not provided)
+5. restarts service
 
 Required GitHub repository secrets:
 - `SSH_HOST`

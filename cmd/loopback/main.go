@@ -31,11 +31,11 @@ func main() {
 	inputDevice, outputDevice := utils.SelectDevice(devices)
 
 	// Show configuration
-	utils.ShowAudioParams(cfg, inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
+	utils.ShowAudioParams(cfg, int(inputDevice.DefaultSampleRate), inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
 
 	// Select optimal parameters
 	cfg = utils.SelectConfig(inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
-	utils.ShowAudioParams(cfg, cfg.InputChannels, cfg.OutputChannels)
+	utils.ShowAudioParams(cfg, int(cfg.SampleRate), cfg.InputChannels, cfg.OutputChannels)
 
 	// Create audio stream
 	audioStream, err := audio.NewAudioStream(cfg, inputDevice, outputDevice)

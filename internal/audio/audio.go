@@ -9,13 +9,17 @@ import (
 	"github.com/nikarpoff/audio-streamer/internal/config"
 )
 
+const (
+	audioQueueSize = 6
+)
+
 type AudioStream struct {
 	stream       *portaudio.Stream   // PortAudio Stream
 	config       *config.AudioConfig // Config (sr, buffer size)
 	inputBuffer  []int16             // Internal portaudio buffer
 	outputBuffer []int16             // Internal portaudio buffer
-	InputBuffer  chan []int16        // External buffer for audio stream (streamer <-> websocket)
-	OutputBuffer chan []int16        // External buffer for audio stream (streamer <-> websocket)
+	InputBuffer  chan []int16        // External buffer for audio stream (streamer <-> socket)
+	OutputBuffer chan []int16        // External buffer for audio stream (streamer <-> socket)
 	StopPlayback chan os.Signal      // Signal to stop playing
 	StopCapture  chan os.Signal      // Signal to stop capture
 }
@@ -69,8 +73,8 @@ func NewAudioStream(cfg *config.AudioConfig, captureDevice *portaudio.DeviceInfo
 	}
 
 	// Bufferized audiodata channels
-	inputBuffer := make([]int16, cfg.BufferSize)
-	outputBuffer := make([]int16, cfg.BufferSize)
+	inputBuffer := make([]int16, cfg.BufferSize*cfg.InputChannels)
+	outputBuffer := make([]int16, cfg.BufferSize*cfg.OutputChannels)
 
 	// Create capture stream
 	stream, err := portaudio.OpenStream(streamParams, &inputBuffer, &outputBuffer)
@@ -84,8 +88,8 @@ func NewAudioStream(cfg *config.AudioConfig, captureDevice *portaudio.DeviceInfo
 		config:       cfg,
 		inputBuffer:  inputBuffer,
 		outputBuffer: outputBuffer,
-		InputBuffer:  make(chan []int16, 100),
-		OutputBuffer: make(chan []int16, 100),
+		InputBuffer:  make(chan []int16, audioQueueSize),
+		OutputBuffer: make(chan []int16, audioQueueSize),
 		StopPlayback: make(chan os.Signal, 1),
 		StopCapture:  make(chan os.Signal, 1),
 	}, nil
@@ -97,7 +101,7 @@ func (s *AudioStream) Start() error {
 		return fmt.Errorf("failed to start audio stream: %w", err)
 	}
 
-	log.Printf("Audio capture/playback started: %.0f Hz, buffer: %d\n",
+	log.Printf("Audio capture/playback started: %.0f Hz, frames/buffer: %d\n",
 		s.config.SampleRate, s.config.BufferSize)
 
 	go s.startCapture()
@@ -123,7 +127,13 @@ func (s *AudioStream) startCapture() {
 			data := make([]int16, len(s.inputBuffer))
 			copy(data, s.inputBuffer)
 
-			s.InputBuffer <- data
+			select {
+			case s.InputBuffer <- data:
+			default:
+				// Drop oldest buffered capture block to avoid latency accumulation.
+				<-s.InputBuffer
+				s.InputBuffer <- data
+			}
 		}
 	}
 
