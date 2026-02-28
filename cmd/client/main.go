@@ -106,7 +106,7 @@ func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream, outputC
 			return
 		}
 
-		sequence, samples, err := protocol.DecodeAudioPacketToChannels(buffer[:n], outputChannels)
+		sequence, samples, err := protocol.DecodeAudioPacket(buffer[:n])
 		if err != nil {
 			continue
 		}
@@ -130,11 +130,13 @@ func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream, outputC
 		lastSamples = make([]int16, len(samples))
 		copy(lastSamples, samples)
 
+		playbackSamples := audio.MonoToInterleaved(samples, outputChannels)
+
 		select {
-		case audioStream.OutputBuffer <- samples:
+		case audioStream.OutputBuffer <- playbackSamples:
 		default:
 			<-audioStream.OutputBuffer
-			audioStream.OutputBuffer <- samples
+			audioStream.OutputBuffer <- playbackSamples
 		}
 	}
 }
@@ -149,7 +151,8 @@ func writeAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream, inputC
 		}
 
 		// Convert int16 samples to bytes
-		packet := protocol.EncodeAudioPacketMono(sequence, data, inputChannels)
+		mono := audio.MixToMonoInterleaved(data, inputChannels)
+		packet := protocol.EncodeAudioPacket(sequence, mono)
 		sequence++
 
 		_, err := conn.Write(packet)
