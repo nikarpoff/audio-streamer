@@ -9,7 +9,7 @@ const (
 	clientSendBufferSize = 8
 	clientIdleTimeout    = 30 * time.Second
 	cleanupPeriod        = 5 * time.Second
-	broadcastBufferSize  = 256
+	broadcastBufferSize  = 32
 )
 
 type udpClient struct {

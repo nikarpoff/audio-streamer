@@ -72,6 +72,42 @@ This project now applies two real-time-safe strategies that do not add playout d
 
 These techniques are useful for rehearsal scenarios where keeping timing is more important than perfect packet completeness.
 
+## Buffer sizing recommendations (low-latency rehearsal)
+Use different buffers for different goals:
+
+- **AudioStream.InputBuffer / AudioStream.OutputBuffer** (`chan []int16`)
+  - Unit: audio blocks (not bytes).
+  - Purpose: absorb tiny scheduling jitter between PortAudio callback and UDP goroutines.
+  - Low-latency recommendation: **3-5 blocks** (default set to `4`).
+  - Too small: occasional underruns/dropouts.
+  - Too large: extra queueing delay in application layer.
+
+- **Client/Server UDP datagram read buffer** (`make([]byte, N)`)
+  - Unit: bytes per single received UDP packet in userspace.
+  - Purpose: temporary packet storage for one `Read` call.
+  - Recommendation: must be `>= max packet size`; here `8192` gives safe headroom for current PCM packets.
+  - Too small: packet truncation/corruption.
+  - Too large: usually harmless, small extra memory.
+
+- **Socket OS buffers** (`SetReadBuffer/SetWriteBuffer`)
+  - Unit: bytes in kernel socket queues.
+  - Purpose: absorb short traffic bursts before app goroutines handle packets.
+  - Recommendation: around **1-4 MiB** for unstable networks; default `1 MiB`.
+  - Too small: kernel drops under burst.
+  - Too large: more burst tolerance but can hide congestion.
+
+- **Hub broadcastBufferSize** (`chan audioMessage`)
+  - Unit: packets in server app queue.
+  - Purpose: decouple server UDP read loop from fan-out writes.
+  - Low-latency recommendation: **16-64 packets**; default set to `32`.
+  - Too large: older frames live longer in queue and become stale.
+  - Too small: drops increase during micro-spikes.
+
+In practice, start with defaults in this repo and tune in this order:
+1) keep audio block size low/stable (64-128 frames if hardware allows)
+2) keep app queues short (`audioQueueSize`, `broadcastBufferSize`)
+3) increase OS socket buffers only if bursts still cause drops
+
 ## Default server from environment
 The client reads `AUDIO_STREAMER_SERVER_ADDR` from process environment.
 
