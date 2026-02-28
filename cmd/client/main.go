@@ -13,6 +13,7 @@ import (
 )
 
 const udpSocketBufferSize = 1 << 20 // 1 MiB
+const maxConcealedPacketsPerGap = 2 // Packets number that can be replaced in gap
 
 func main() {
 	utils.PrintWelcome("Client")
@@ -76,61 +77,9 @@ func main() {
 	log.Println("You joined to server! Other clients can hear your microphone!")
 	log.Println("Press Ctrl+C to stop")
 
-	// Handle incoming audio messages
-	go func() {
-		buffer := make([]byte, 4096)
-
-		var lastSequence uint32
-		hasSequence := false
-
-		for {
-			n, err := conn.Read(buffer)
-			if err != nil {
-				log.Println("Read error:", err)
-				return
-			}
-
-			sequence, samples, err := protocol.DecodeAudioPacket(buffer[:n])
-			if err != nil {
-				continue
-			}
-
-			if hasSequence && !protocol.SequenceAhead(sequence, lastSequence) {
-				continue
-			}
-			lastSequence = sequence
-			hasSequence = true
-
-			select {
-			case audioStream.OutputBuffer <- samples:
-			default:
-				<-audioStream.OutputBuffer
-				audioStream.OutputBuffer <- samples
-			}
-		}
-	}()
-
-	// Send captured audio
-	go func() {
-		sequence := uint32(1)
-
-		for {
-			data, ok := <-audioStream.InputBuffer
-			if !ok {
-				return
-			}
-
-			// Convert int16 samples to bytes
-			packet := protocol.EncodeAudioPacket(sequence, data)
-			sequence++
-
-			_, err := conn.Write(packet)
-			if err != nil {
-				log.Println("Write error:", err)
-				return
-			}
-		}
-	}()
+	// Start goroutines for reading and writing audio packets
+	go readAudioPackets(conn, audioStream)
+	go writeAudioPackets(conn, audioStream)
 
 	// Wait for interrupt signal
 	interrupt := make(chan os.Signal, 1)
@@ -139,4 +88,92 @@ func main() {
 	<-interrupt
 	log.Println("Shutting down...")
 	close(interrupt)
+}
+
+func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
+	// Handle incoming audio messages
+	buffer := make([]byte, 4096)
+
+	var lastSequence uint32
+	var lastSamples []int16
+	hasSequence := false
+
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Println("Read error:", err)
+			return
+		}
+
+		sequence, samples, err := protocol.DecodeAudioPacket(buffer[:n])
+		if err != nil {
+			continue
+		}
+
+		if hasSequence && !protocol.SequenceAhead(sequence, lastSequence) {
+			continue
+		}
+
+		// Conceal packet loss if sequence gap detected
+		if hasSequence {
+			gap := int(sequence - lastSequence - 1)
+			if gap > 0 && len(lastSamples) > 0 {
+				log.Printf("Packet loss detected: gap of %d packets (last sequence: %d, current: %d)", gap, lastSequence, sequence)
+				concealPacketLoss(lastSamples, gap, audioStream)
+			}
+		}
+
+		lastSequence = sequence
+		hasSequence = true
+
+		lastSamples = make([]int16, len(samples))
+		copy(lastSamples, samples)
+
+		select {
+		case audioStream.OutputBuffer <- samples:
+		default:
+			<-audioStream.OutputBuffer
+			audioStream.OutputBuffer <- samples
+		}
+	}
+}
+
+func writeAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
+	sequence := uint32(1)
+
+	for {
+		data, ok := <-audioStream.InputBuffer
+		if !ok {
+			return
+		}
+
+		// Convert int16 samples to bytes
+		packet := protocol.EncodeAudioPacket(sequence, data)
+		sequence++
+
+		_, err := conn.Write(packet)
+		if err != nil {
+			log.Println("Write error:", err)
+			return
+		}
+	}
+}
+
+func concealPacketLoss(lastSamples []int16, gap int, audioStream *audio.AudioStream) {
+	// Simple concealment strategy: repeat last received samples for a limited number of lost packets.
+	if gap > maxConcealedPacketsPerGap {
+		gap = maxConcealedPacketsPerGap
+	}
+
+	for i := 0; i < gap; i++ {
+		concealed := make([]int16, len(lastSamples))
+		copy(concealed, lastSamples)
+
+		select {
+		case audioStream.OutputBuffer <- concealed:
+		default:
+			<-audioStream.OutputBuffer
+			audioStream.OutputBuffer <- concealed
+		}
+	}
 }
