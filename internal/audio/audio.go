@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	audioQueueSize = 6
+	audioQueueSize = 4 // Number of audio blocks that can be buffered from PortAudio to socket and from socket to PortAudio
 )
 
 type AudioStream struct {

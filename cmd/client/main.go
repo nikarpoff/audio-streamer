@@ -42,6 +42,7 @@ func main() {
 	// Select optimal parameters
 	cfg = utils.SelectConfig(inputDevice.MaxInputChannels, outputDevice.MaxOutputChannels)
 	utils.ShowAudioParams(cfg, int(cfg.SampleRate), cfg.InputChannels, cfg.OutputChannels)
+	log.Printf("Network mode: mono (capture mixed from %dch, playback expanded to %dch)", cfg.InputChannels, cfg.OutputChannels)
 
 	// Create audio capture and playback
 	audioStream, err := audio.NewAudioStream(cfg, inputDevice, outputDevice)
@@ -78,8 +79,8 @@ func main() {
 	log.Println("Press Ctrl+C to stop")
 
 	// Start goroutines for reading and writing audio packets
-	go readAudioPackets(conn, audioStream)
-	go writeAudioPackets(conn, audioStream)
+	go readAudioPackets(conn, audioStream, cfg.OutputChannels)
+	go writeAudioPackets(conn, audioStream, cfg.InputChannels)
 
 	// Wait for interrupt signal
 	interrupt := make(chan os.Signal, 1)
@@ -90,9 +91,9 @@ func main() {
 	close(interrupt)
 }
 
-func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
+func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream, outputChannels int) {
 	// Handle incoming audio messages
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, 8192)
 
 	var lastSequence uint32
 	var lastSamples []int16
@@ -105,7 +106,7 @@ func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
 			return
 		}
 
-		sequence, samples, err := protocol.DecodeAudioPacket(buffer[:n])
+		sequence, samples, err := protocol.DecodeAudioPacketToChannels(buffer[:n], outputChannels)
 		if err != nil {
 			continue
 		}
@@ -138,7 +139,7 @@ func readAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
 	}
 }
 
-func writeAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
+func writeAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream, inputChannels int) {
 	sequence := uint32(1)
 
 	for {
@@ -148,7 +149,7 @@ func writeAudioPackets(conn *net.UDPConn, audioStream *audio.AudioStream) {
 		}
 
 		// Convert int16 samples to bytes
-		packet := protocol.EncodeAudioPacket(sequence, data)
+		packet := protocol.EncodeAudioPacketMono(sequence, data, inputChannels)
 		sequence++
 
 		_, err := conn.Write(packet)
