@@ -51,7 +51,7 @@ cd ./cmd/loopwind
 Current defaults are tuned for lower end-to-end latency:
 - sample rate `48000`
 - buffer size `128` frames
-- bounded in-memory queues with packet dropping instead of queue growth
+- bounded in-memory queues with packet dropping instead of queue growthxz
 
 For rehearsal-grade latency (10-20ms target), keep these practical rules:
 1. use wired Ethernet
@@ -59,6 +59,18 @@ For rehearsal-grade latency (10-20ms target), keep these practical rules:
 3. keep `buffer size` in range `64..128` if your hardware is stable
 4. run all peers with the same sample rate/channels to avoid resampling
 
+## Handling UDP packet loss without adding latency
+This project now applies two real-time-safe strategies that do not add playout delay:
+
+1. **Fresh-frame prioritization in server hub queue**
+   - when the broadcast queue is overloaded, the oldest queued frame is dropped and the newest frame is kept
+   - this prevents blocking the UDP read loop (which would otherwise cause kernel-level drops)
+
+2. **Client-side packet loss concealment (PLC)**
+   - if sequence gaps are detected, the client replays the last good frame for up to 2 missing packets
+   - this masks short drop bursts with minimal artifacts and no additional buffering latency
+
+These techniques are useful for rehearsal scenarios where keeping timing is more important than perfect packet completeness.
 
 ## Default server from environment
 The client reads `AUDIO_STREAMER_SERVER_ADDR` from process environment.

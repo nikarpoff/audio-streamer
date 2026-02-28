@@ -3,7 +3,8 @@ package audio
 import (
 	"fmt"
 	"log"
-	"os"
+	"sync"
+	"sync/atomic"
 
 	"github.com/gordonklaus/portaudio"
 	"github.com/nikarpoff/audio-streamer/internal/config"
@@ -20,8 +21,12 @@ type AudioStream struct {
 	outputBuffer []int16             // Internal portaudio buffer
 	InputBuffer  chan []int16        // External buffer for audio stream (streamer <-> socket)
 	OutputBuffer chan []int16        // External buffer for audio stream (streamer <-> socket)
-	StopPlayback chan os.Signal      // Signal to stop playing
-	StopCapture  chan os.Signal      // Signal to stop capture
+
+	// Cancelation channels for capture and playback goroutines
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
+	stopped  atomic.Bool
 }
 
 func InitializePortaudio() error {
@@ -90,8 +95,7 @@ func NewAudioStream(cfg *config.AudioConfig, captureDevice *portaudio.DeviceInfo
 		outputBuffer: outputBuffer,
 		InputBuffer:  make(chan []int16, audioQueueSize),
 		OutputBuffer: make(chan []int16, audioQueueSize),
-		StopPlayback: make(chan os.Signal, 1),
-		StopCapture:  make(chan os.Signal, 1),
+		stopCh:       make(chan struct{}),
 	}, nil
 }
 
@@ -104,6 +108,7 @@ func (s *AudioStream) Start() error {
 	log.Printf("Audio capture/playback started: %.0f Hz, frames/buffer: %d\n",
 		s.config.SampleRate, s.config.BufferSize)
 
+	s.wg.Add(2) // Wait group for capture and playback goroutines
 	go s.startCapture()
 	go s.startPlayback()
 
@@ -111,12 +116,13 @@ func (s *AudioStream) Start() error {
 }
 
 func (s *AudioStream) startCapture() {
-	running := true
+	defer s.wg.Done()
 
-	for running {
+	for {
 		select {
-		case <-s.StopCapture:
-			running = false
+		case <-s.stopCh:
+			log.Printf("Capturing stopped")
+			return
 		default:
 			if err := s.stream.Read(); err != nil {
 				log.Printf("Read (capture) error: %v", err)
@@ -136,17 +142,16 @@ func (s *AudioStream) startCapture() {
 			}
 		}
 	}
-
-	log.Printf("Capturing stopped")
 }
 
 func (s *AudioStream) startPlayback() {
-	running := true
+	defer s.wg.Done()
 
-	for running {
+	for {
 		select {
-		case <-s.StopPlayback:
-			running = false
+		case <-s.stopCh:
+			log.Printf("Playing stopped")
+			return
 		case data, ok := <-s.OutputBuffer:
 			if !ok {
 				log.Println("Recieved not ok status from OutputBuffer! Skip data!")
@@ -161,12 +166,15 @@ func (s *AudioStream) startPlayback() {
 			}
 		}
 	}
-
-	log.Printf("Playing stopped")
 }
 
 // Stops and closes portaudio stream, closes buffers and terminates portaudio!
 func (s *AudioStream) Stop() error {
+	s.stopOnce.Do(func() {
+		s.stopped.Store(true)
+		close(s.stopCh)
+	})
+
 	if s.stream != nil {
 		if err := s.stream.Stop(); err != nil {
 			return err
@@ -176,12 +184,15 @@ func (s *AudioStream) Stop() error {
 		}
 	}
 
-	portaudio.Terminate()
+	// Wait for capture and playback goroutines to finish
+	s.wg.Wait()
+
+	if err := portaudio.Terminate(); err != nil {
+		return err
+	}
 
 	close(s.InputBuffer)
 	close(s.OutputBuffer)
-	close(s.StopCapture)
-	close(s.StopPlayback)
 
 	log.Println("Audio capture/playback stopped")
 	return nil

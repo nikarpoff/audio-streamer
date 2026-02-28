@@ -9,6 +9,7 @@ const (
 	clientSendBufferSize = 8
 	clientIdleTimeout    = 30 * time.Second
 	cleanupPeriod        = 5 * time.Second
+	broadcastBufferSize  = 256
 )
 
 type udpClient struct {
@@ -35,9 +36,9 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[string]*udpClient),
-		broadcast:  make(chan audioMessage, 64),
-		register:   make(chan *net.UDPAddr, 64),
-		unregister: make(chan string, 64),
+		broadcast:  make(chan audioMessage, broadcastBufferSize),
+		register:   make(chan *net.UDPAddr, 8),
+		unregister: make(chan string, 8),
 	}
 }
 
@@ -46,7 +47,25 @@ func (h *Hub) Register(client *net.UDPAddr) {
 }
 
 func (h *Hub) Broadcast(sender *net.UDPAddr, packet *[]byte) {
-	h.broadcast <- audioMessage{sender: sender, data: *packet}
+	message := audioMessage{sender: sender, data: *packet}
+
+	select {
+	case h.broadcast <- message:
+		// alright
+	default:
+		// Hub is overloaded. Drop the oldest queued packet to avoid blocking UDP reads
+		// and prioritize fresh audio frames.
+		select {
+		case <-h.broadcast:
+		default:
+		}
+
+		select {
+		case h.broadcast <- message:
+		default:
+			// Queue is still full, skip this frame.
+		}
+	}
 }
 
 func (h *Hub) Run(conn *net.UDPConn) {
