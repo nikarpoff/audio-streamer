@@ -3,8 +3,6 @@ package protocol
 import (
 	"encoding/binary"
 	"errors"
-
-	"github.com/nikarpoff/audio-streamer/internal/audio"
 )
 
 const HeaderSize = 4
@@ -23,13 +21,6 @@ func EncodeAudioPacket(sequence uint32, pcm []int16) []byte {
 	return packet
 }
 
-// EncodeAudioPacketMono encodes input interleaved PCM to mono payload by averaging
-// channels per frame before writing packet data.
-func EncodeAudioPacketMono(sequence uint32, pcm []int16, inputChannels int) []byte {
-	mono := audio.MixToMonoInterleaved(pcm, inputChannels)
-	return EncodeAudioPacket(sequence, mono)
-}
-
 func DecodeAudioPacket(packet []byte) (uint32, []int16, error) {
 	if len(packet) < HeaderSize {
 		return 0, nil, ErrPacketTooSmall
@@ -45,17 +36,6 @@ func DecodeAudioPacket(packet []byte) (uint32, []int16, error) {
 	}
 
 	return sequence, samples, nil
-}
-
-// DecodeAudioPacketToChannels decodes mono payload and duplicates it into
-// interleaved output channel count for playback.
-func DecodeAudioPacketToChannels(packet []byte, outputChannels int) (uint32, []int16, error) {
-	sequence, mono, err := DecodeAudioPacket(packet)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return sequence, audio.MonoToInterleaved(mono, outputChannels), nil
 }
 
 func SequenceAhead(sequence uint32, last uint32) bool {
